@@ -1,0 +1,14 @@
+{
+  "profile": "public",
+  "enc": false,
+  "built": "2026-10-21 11:08",
+  "pages": 764,
+  "chars": 3868726,
+  "shards": 5,
+  "bytes": {
+    "stat": 446,
+    "tree": 77901,
+    "meta": 498581,
+    "shard_total": 10907614
+  }
+}

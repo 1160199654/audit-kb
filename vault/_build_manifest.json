@@ -1,0 +1,14 @@
+{
+  "profile": "vault",
+  "enc": true,
+  "built": "2026-10-21 11:08",
+  "pages": 5282,
+  "chars": 35258173,
+  "shards": 44,
+  "bytes": {
+    "stat": 817,
+    "tree": 563645,
+    "meta": 3831283,
+    "shard_total": 99457150
+  }
+}
