@@ -3,6 +3,6 @@
  "alg": "PBKDF2-SHA256/AES-256-GCM",
  "gz": true,
  "iter": 200000,
- "salt": "grwCbPTyxexzkxghrAWM+mSn04KQYFSIJMLk18lqb/8=",
+ "salt": "ilWA1ETsBSzOY0bRiQcL2QUr3FxUZhHm/wH1zkYgUjk=",
  "check": "_check.bin"
 }

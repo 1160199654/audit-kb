@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <title>自用审计知识库 · 全文检索</title>
 <link rel="icon" href="data:,">
 <style>
@@ -549,6 +550,48 @@ table.gram td:last-child{color:var(--ink2);padding-right:0}
   border-bottom-width:2px;border-radius:4px;padding:3px 6px;color:var(--ink2);margin-left:3px;
 }
 
+/* 本机访问记录面板 */
+#vlog{position:fixed;inset:0;background:rgba(20,20,18,.42);display:none;align-items:center;justify-content:center;z-index:130;padding:20px}
+#vlog.show{display:flex}
+#vlog .vl{
+  background:var(--surface);border-radius:16px;box-shadow:var(--shadow2);
+  width:min(760px,100%);max-height:86vh;border:1px solid var(--line);
+  padding:20px 22px 16px;display:flex;flex-direction:column;
+}
+#vlog .vl h3{
+  margin:0 0 13px;font-size:14px;font-weight:700;color:var(--ink);
+  display:flex;align-items:center;gap:9px;
+}
+#vlog .vl h3 em{font-style:normal;font-weight:400;font-size:11.5px;color:var(--ink3);flex:1}
+#vlog .vl h3 button{border:0;background:none;cursor:pointer;color:var(--ink3);font-size:16px;padding:0}
+.vl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.vl-stats .s{background:var(--surface2);border:1px solid var(--line2);border-radius:9px;padding:8px 11px}
+.vl-stats .s b{display:block;font-size:17px;line-height:1.3;color:var(--brand);font-variant-numeric:tabular-nums}
+.vl-stats .s span{font-size:11px;color:var(--ink3)}
+.vl-list{
+  flex:1;overflow:auto;border:1px solid var(--line2);border-radius:9px;
+  background:var(--surface2);min-height:170px;
+}
+.vl-list table{width:100%;border-collapse:collapse;font-size:12px}
+.vl-list th,.vl-list td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line2);white-space:nowrap}
+.vl-list th{position:sticky;top:0;background:var(--surface3);color:var(--ink3);font-weight:600;font-size:11px;z-index:1}
+.vl-list tr:last-child td{border-bottom:0}
+.vl-list td.tm{color:var(--ink3);font-variant-numeric:tabular-nums}
+.vl-list td.tx{color:var(--ink2);white-space:normal;word-break:break-all}
+.vl-list .ev{padding:1px 7px;border-radius:5px;font-size:10.5px;white-space:nowrap}
+.vl-list .ev-open{background:var(--soft);color:var(--brand)}
+.vl-list .ev-search{background:var(--extsoft);color:var(--ext)}
+.vl-list .ev-unlock{background:var(--surface3);color:var(--ink);border:1px solid var(--line)}
+.vl-list .ev-boot{background:transparent;color:var(--ink3)}
+.vl-empty{padding:36px 12px;text-align:center;color:var(--ink3);font-size:12.5px;line-height:2}
+.vl-foot{display:flex;gap:8px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap}
+.vl-btn{
+  border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:7px;
+  padding:6px 13px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s;
+}
+.vl-btn:hover{border-color:var(--brand);color:var(--brand)}
+.vl-btn.danger:hover{border-color:var(--ext);color:var(--ext)}
+
 
 /* ==================== 口令解锁页（vault 版） ==================== */
 html[data-locked] .app{display:none}
@@ -651,6 +694,7 @@ html[data-locked] #topline{display:none}
       <button id="fsUp" title="放大字号">A+</button>
     </div>
     <button class="iconbtn" id="btnTheme" title="切换深浅色">🌙</button>
+    <button class="iconbtn" id="btnVlog" title="本机访问记录">◷</button>
     <button class="iconbtn" id="btnKbd" title="快捷键 (?)">?</button>
   </header>
 
@@ -700,7 +744,18 @@ html[data-locked] #topline{display:none}
   </dl>
 </div></div>
 
-<script>window.KB_CONFIG={"enc": false, "label": "public", "base": "data/", "profile": "public"};</script>
+<div id="vlog"><div class="vl">
+  <h3>本机访问记录<em>只存在这台设备的浏览器里，不上传、不联网</em><button id="vlogClose">✕</button></h3>
+  <div class="vl-stats" id="vlogStats"></div>
+  <div class="vl-list" id="vlogList"></div>
+  <div class="vl-foot">
+    <button class="vl-btn" id="vlogCsv">导出 CSV</button>
+    <button class="vl-btn" id="vlogJson">导出 JSON</button>
+    <button class="vl-btn danger" id="vlogClear">清空记录</button>
+  </div>
+</div></div>
+
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

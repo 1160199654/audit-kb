@@ -62,6 +62,194 @@ function loading(on,title,sub,p){
 }
 
 /* ============================================================
+   1b. 本机访问记录（localStorage，全程不联网）
+   ------------------------------------------------------------
+   只记四类事件：页面载入 / 解锁成功 / 打开篇目 / 检索。
+   存储为紧凑数组 [秒级时间戳, 事件码, 参数…]，超出上限按 2/3 截断。
+   ============================================================ */
+var VLOG_KEY = 'kb_vlog', VLOG_MAX = 3000;
+var VLOG_EV = {
+  b: ['载入', 'boot'],
+  u: ['解锁', 'unlock'],
+  o: ['打开', 'open'],
+  s: ['检索', 'search']
+};
+
+function vlogAll(){
+  try{
+    var a = JSON.parse(read(VLOG_KEY) || '[]');
+    return Array.isArray(a) ? a : [];
+  }catch(e){ return []; }
+}
+
+function vlogAdd(ev, o){
+  o = o || {};
+  var row = [Math.floor(Date.now()/1000), ev];
+  if(ev === 'o'){ row.push(o.id, o.t || '', o.c || ''); }
+  else if(ev === 's'){ row.push(o.q || '', o.n || 0, o.full ? 1 : 0); }
+  var a = vlogAll();
+  a.push(row);
+  if(a.length > VLOG_MAX) a = a.slice(a.length - Math.floor(VLOG_MAX * 2 / 3));
+  try{ store(VLOG_KEY, JSON.stringify(a)); }catch(e){}
+}
+
+/* 检索记录做 1.2 秒静默合并：连续敲字只留最后一次，且同条件不重复记 */
+var vlogSearchTimer, vlogSearchLast = '';
+function vlogSearch(q, n, full){
+  clearTimeout(vlogSearchTimer);
+  if(!q) return;
+  vlogSearchTimer = setTimeout(function(){
+    var k = q + '\u0000' + n + '\u0000' + (full ? 1 : 0);
+    if(k === vlogSearchLast) return;
+    vlogSearchLast = k;
+    vlogAdd('s', {q: q, n: n, full: full});
+  }, 1200);
+}
+
+function pad2(x){ return x < 10 ? '0' + x : '' + x; }
+function vlogTime(ts){
+  var d = new Date(ts * 1000);
+  return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate())
+       + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+function datestamp(){
+  var d = new Date();
+  return d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate())
+       + '_' + pad2(d.getHours()) + pad2(d.getMinutes());
+}
+
+function vlogStats(){
+  var a = vlogAll(), ids = {}, days = {}, st = {open:0, search:0, unlock:0, boot:0};
+  a.forEach(function(r){
+    if(r[1] === 'o'){ st.open++; ids[r[2]] = 1; }
+    else if(r[1] === 's') st.search++;
+    else if(r[1] === 'u') st.unlock++;
+    else if(r[1] === 'b') st.boot++;
+    var d = new Date(r[0] * 1000);
+    days[d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate()] = 1;
+  });
+  st.uniq = Object.keys(ids).length;
+  st.days = Object.keys(days).length;
+  st.total = a.length;
+  return st;
+}
+
+function vlogRowText(r){
+  if(r[1] === 'o') return r[3] || ('#' + r[2]);
+  if(r[1] === 's') return r[2] || '';
+  if(r[1] === 'u') return '内部版口令校验通过';
+  return '打开站点';
+}
+
+function renderVlog(){
+  var st = vlogStats(), a = vlogAll().slice().reverse();
+  $('vlogStats').innerHTML =
+      '<div class="s"><b>' + fmt(st.uniq) + '</b><span>打开过的不重复篇目</span></div>'
+    + '<div class="s"><b>' + fmt(st.search) + '</b><span>检索次数</span></div>'
+    + '<div class="s"><b>' + fmt(st.days) + '</b><span>使用天数</span></div>'
+    + '<div class="s"><b>' + fmt(st.unlock) + '</b><span>解锁次数</span></div>';
+
+  var box = $('vlogList');
+  if(!a.length){
+    box.innerHTML = '<div class="vl-empty">还没有记录。<br>打开任意一篇、做一次检索，这里就会留下痕迹。</div>';
+    return;
+  }
+  var h = '<table><thead><tr><th style="width:120px">时间</th><th style="width:56px">动作</th><th>内容</th></tr></thead><tbody>';
+  a.slice(0, 400).forEach(function(r){
+    var m = VLOG_EV[r[1]] || ['未知', ''];
+    var tx;
+    if(r[1] === 'o'){
+      tx = '<a data-vopen="' + r[2] + '" href="#p' + r[2] + '">' + esc(r[3] || ('#' + r[2])) + '</a>'
+         + (r[4] ? ' <span style="color:var(--ink3)">· ' + esc(r[4]) + '</span>' : '');
+    } else if(r[1] === 's'){
+      tx = '<code>' + esc(r[2]) + '</code> <span style="color:var(--ink3)">· 命中 '
+         + fmt(r[3] || 0) + ' 篇' + (r[4] ? ' · 全文' : '') + '</span>';
+    } else if(r[1] === 'u'){
+      tx = '内部版口令校验通过';
+    } else {
+      tx = '打开站点';
+    }
+    h += '<tr><td class="tm">' + vlogTime(r[0]) + '</td>'
+       + '<td><span class="ev ev-' + m[1] + '">' + m[0] + '</span></td>'
+       + '<td class="tx">' + tx + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  if(a.length > 400) h += '<div class="vl-empty" style="padding:12px">只显示最近 400 条，导出可取得全部 ' + fmt(a.length) + ' 条</div>';
+  box.innerHTML = h;
+  box.querySelectorAll('[data-vopen]').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.preventDefault();
+      closeVlog();
+      openDoc(+el.getAttribute('data-vopen'));
+    });
+  });
+}
+
+function vlogDownload(name, text, mime){
+  try{
+    var url = URL.createObjectURL(new Blob([text], {type: mime}));
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1500);
+    toast('已导出 ' + name);
+  }catch(e){ toast('导出失败：' + (e.message || e)); }
+}
+
+function vlogCsv(){
+  var rows = [['时间', '动作', '内容', '篇目ID', '命中数', '检索模式']];
+  vlogAll().forEach(function(r){
+    var m = VLOG_EV[r[1]] || ['未知', ''];
+    rows.push([
+      vlogTime(r[0]), m[0], vlogRowText(r),
+      r[1] === 'o' ? r[2] : '',
+      r[1] === 's' ? (r[3] || 0) : '',
+      r[1] === 's' ? (r[4] ? '全文' : '快速') : ''
+    ]);
+  });
+  var csv = '\ufeff' + rows.map(function(r){
+    return r.map(function(x){
+      return '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
+    }).join(',');
+  }).join('\r\n');
+  vlogDownload('知识库访问记录_' + datestamp() + '.csv', csv, 'text/csv;charset=utf-8');
+}
+
+function vlogJson(){
+  var st = vlogStats(), out = [];
+  vlogAll().forEach(function(r){
+    var m = VLOG_EV[r[1]] || ['未知', ''];
+    var o = {time: vlogTime(r[0]), ts: r[0], event: m[0], text: vlogRowText(r)};
+    if(r[1] === 'o'){ o.id = r[2]; o.category = r[4] || ''; }
+    if(r[1] === 's'){ o.query = r[2]; o.hits = r[3] || 0; o.mode = r[4] ? 'full' : 'quick'; }
+    out.push(o);
+  });
+  vlogDownload('知识库访问记录_' + datestamp() + '.json',
+    JSON.stringify({profile: CFG.profile, exported: vlogTime(Math.floor(Date.now()/1000)),
+                    summary: st, records: out}, null, 2),
+    'application/json;charset=utf-8');
+}
+
+var vlogClearArm = 0;
+function vlogClear(){
+  var b = $('vlogClear');
+  if(!vlogClearArm){
+    vlogClearArm = 1;
+    b.textContent = '再点一次确认清空';
+    setTimeout(function(){ vlogClearArm = 0; b.textContent = '清空记录'; }, 4000);
+    return;
+  }
+  vlogClearArm = 0;
+  b.textContent = '清空记录';
+  try{ localStorage.removeItem(VLOG_KEY); }catch(e){}
+  renderVlog();
+  toast('记录已清空');
+}
+
+function openVlog(){ renderVlog(); $('vlog').classList.add('show'); }
+function closeVlog(){ $('vlog').classList.remove('show'); }
+
+/* ============================================================
    2. 高亮（跳过 HTML 标签，避免破坏结构）
    ============================================================ */
 function hlText(txt,kws){
@@ -558,6 +746,7 @@ function showResults(){
 
   var box=$('paneRes');
   var total=S.results.length;
+  if(S.q) vlogSearch(S.q, total, S.full);   // 检索留痕（静默合并，翻页不重复记）
   var pages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   if(S.page>=pages) S.page=pages-1;
   var slice=S.results.slice(S.page*PAGE_SIZE,(S.page+1)*PAGE_SIZE);
@@ -734,6 +923,7 @@ function openDoc(id){
   var o = idIdx[id];
   if(!o){ ensureMeta(function(){ openDoc(id); }); return; }
   S.cur=id;
+  vlogAdd('o', {id:id, t:o.t, c:(o.p && o.p[0]) || ''});
   if(location.hash!=='#p'+id){
     try{ history.pushState(null,'','#p'+id); }catch(e){ location.hash='p'+id; }
   }
@@ -1287,6 +1477,7 @@ function doUnlock(){
         var el = document.getElementById('lock');
         if(el) el.remove();
         document.documentElement.removeAttribute('data-locked');
+        vlogAdd('u');                    // 解锁留痕（不含口令、不含派生密钥）
         startData();
       } else {
         if(btn){ btn.textContent='进入'; btn.disabled=false; }
@@ -1396,6 +1587,15 @@ function startApp(){
   $('kbdClose').addEventListener('click',function(){ $('kbd').classList.remove('show'); });
   $('kbd').addEventListener('click',function(e){ if(e.target===this) this.classList.remove('show'); });
 
+  /* 本机访问记录面板 */
+  $('btnVlog').addEventListener('click',openVlog);
+  $('vlogClose').addEventListener('click',closeVlog);
+  $('vlog').addEventListener('click',function(e){ if(e.target===this) closeVlog(); });
+  $('vlogCsv').addEventListener('click',vlogCsv);
+  $('vlogJson').addEventListener('click',vlogJson);
+  $('vlogClear').addEventListener('click',vlogClear);
+  vlogAdd('b');                      // 页面载入留痕
+
   document.addEventListener('keydown',function(e){
     var inInput = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
     var mod = e.ctrlKey || e.metaKey;
@@ -1407,6 +1607,7 @@ function startApp(){
     if(mod && e.key.toLowerCase()==='f'){ e.preventDefault(); setFull(!S.full); if(qEl.value.trim()) doSearch(); return; }
 
     if(e.key==='Escape'){
+      if($('vlog').classList.contains('show')){ closeVlog(); return; }
       if($('kbd').classList.contains('show')){ $('kbd').classList.remove('show'); return; }
       closeSug();
       return;
