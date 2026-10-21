@@ -1,7 +1,8 @@
 {
- "v": 1,
+ "v": 2,
  "alg": "PBKDF2-SHA256/AES-256-GCM",
+ "gz": true,
  "iter": 200000,
- "salt": "+JhjtUeZudodwr6aKXjv0nXFG6ubJBO9LGOmNVAxVuc=",
+ "salt": "grwCbPTyxexzkxghrAWM+mSn04KQYFSIJMLk18lqb/8=",
  "check": "_check.bin"
 }

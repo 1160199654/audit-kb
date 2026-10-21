@@ -227,6 +227,16 @@ function decryptBuf(buf){
   return crypto.subtle.decrypt({name:'AES-GCM', iv: iv}, ENC_KEY, ct);
 }
 
+/* 数据文件是「先 gzip 再加密」，解密后需解压 */
+function gunzip(buf){
+  if(typeof DecompressionStream !== 'function'){
+    return Promise.reject(new Error('浏览器不支持 DecompressionStream，请使用较新版本的 Chrome / Edge / Safari'));
+  }
+  var ds = new DecompressionStream('gzip');
+  var stream = new Blob([buf]).stream().pipeThrough(ds);
+  return new Response(stream).arrayBuffer();
+}
+
 /* 统一入口：name = stat | tree | meta | shard_N */
 function loadData(name, ok, fail){
   if(!CFG.enc){
@@ -242,6 +252,7 @@ function loadData(name, ok, fail){
       return r.arrayBuffer();
     })
     .then(decryptBuf)
+    .then(gunzip)
     .then(function(pt){ ok(JSON.parse(new TextDecoder().decode(pt))); })
     .catch(function(e){
       console.error('[vault]', name, e);

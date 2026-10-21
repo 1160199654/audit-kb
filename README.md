@@ -22,7 +22,7 @@
 
 ## 内部版
 
-`/vault/` 的数据文件以 **AES-256-GCM** 加密存储，密钥由访问口令经 PBKDF2-SHA256（200,000 次迭代）派生，在浏览器本地解密。
+`/vault/` 的数据文件以 **gzip 压缩 + AES-256-GCM 加密** 双层处理，密钥由访问口令经 PBKDF2-SHA256（200,000 次迭代）派生，在浏览器本地解压解密。
 
 - 没有口令：`data/*.bin` 全部是密文，无法解析出任何标题或正文
 - 有口令：解锁后功能与公开版一致，只是内容更全
@@ -42,7 +42,7 @@
 ├── data/                 公开版数据（明文：stat / tree / meta / shard_N）
 ├── vault/
 │   ├── index.html        内部版入口（含口令解锁）
-│   └── data/             内部版数据（加密：*.bin + _key.json）
+│   └── data/             内部版数据（gzip + 加密：*.bin + _key.json）
 ├── .nojekyll             关闭 GitHub Pages 的 Jekyll 处理
 └── _build_manifest.json  构建清单（篇数 / 字数 / 分片 / 时间）
 ```
