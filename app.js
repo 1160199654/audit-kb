@@ -8,6 +8,10 @@
 /* 站点配置：public 版走明文 <script> 注入（file:// 可用）
               vault  版走加密 .bin + WebCrypto（仅 http/https） */
 var CFG = window.KB_CONFIG || {base:'data/', enc:false, label:'public'};
+/* 品牌名统一取自构建配置（build.py 的 BRAND）：
+   改名字只改那一处，顶栏 / 欢迎页大字 / 浏览器标签会一起变 */
+var BR  = (CFG.brand && CFG.brand.name) || '自用审计知识库';
+var BRS = (CFG.brand && CFG.brand.sub)  || 'INTERNAL KNOWLEDGE BASE';
 var ENC_KEY = null;          // vault 模式的 CryptoKey
 var STAT = {pages:0,chars:0,shards:0,cats:{}};
 var TREE = [];
@@ -1158,8 +1162,8 @@ function renderWelcome(){
   var PUB = CFG.profile === 'public';
   var h='';
   h+='<div class="home-hero">'
-   + '<div class="eyebrow">'+(PUB?'AUDIT KNOWLEDGE BASE':'INTERNAL KNOWLEDGE BASE')+'</div>'
-   + '<h1>'+(PUB?'审计知识库':'自用审计知识库')+'</h1>'
+   + '<div class="eyebrow">'+esc(BRS)+'</div>'
+   + '<h1>'+esc(BR)+'</h1>'
    + '<div class="lede">'
    + (PUB
       ? '审计实务、专题研究与培训材料的公开检索入口。'
@@ -1498,12 +1502,10 @@ function startApp(){
   buildCatSelect(); setSide(!S.sideHidden);
   $('btnSide').classList.toggle('on',!S.sideHidden);
 
-  /* 公开版换品牌口径 */
-  if(CFG.profile==='public'){
-    document.title = '审计知识库 · 全文检索';
-    var bt = document.querySelector('.brand .txt');
-    if(bt) bt.innerHTML = '审计知识库<small>AUDIT KNOWLEDGE BASE</small>';
-  }
+  /* 品牌名：三个版本各自取自己的配置，值不同则显示不同 */
+  document.title = BR + ' · 全文检索';
+  var bt = document.querySelector('.brand .txt');
+  if(bt) bt.innerHTML = esc(BR) + '<small>' + esc(BRS) + '</small>';
 
   $('stats').innerHTML = (CFG.profile==='public'
       ? '<b>'+fmt(STAT.pages||0)+'</b> 篇<br>'
