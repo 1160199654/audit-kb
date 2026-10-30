@@ -667,6 +667,11 @@ function searchMetaOnly(){
   });
 }
 
+/* 全文扫描并发数。
+   分片切细后（公开版 22 片）若仍串行，每个请求的往返耗时会被放大 4 倍：
+   带宽 1MB/s、RTT 200ms 时，5 片×(0.7+0.2)=4.5s，22 片×(0.17+0.2)=8.1s —— 反倒更慢。
+   并发 4 路后约 6 批，总耗时压回 2s 量级，且不会一次打爆连接数。 */
+var FULL_PAR = 6;
 var fullRun=0;
 function searchFull(){
   ensureMeta(function(){
@@ -679,39 +684,50 @@ function searchFull(){
     var shardIds=Object.keys(byShard).map(Number).sort(function(a,b){ return a-b; });
     if(!shardIds.length){ S.results=[]; S.kws=activeKws(parsed); showResults(); return; }
 
-    loading(true,'正在扫描正文','0 / '+shardIds.length+' 个分片',0);
-    var idx=0;
+    var total=shardIds.length, done=0, running=0, next=0, failed=0;
+    loading(true,'正在扫描正文','0 / '+total+' 个分片',0);
 
-    function step(){
-      if(runId!==fullRun) return;
-      if(idx>=shardIds.length){
-        loading(false);
-        hits.sort(function(a,b){ return b.sc-a.sc || (a.o.src-b.o.src) || a.o.c-b.o.c; });
-        hits.forEach(function(r){ r.pct = Math.max(8, Math.round(r.sc/maxSc*100)); });
-        S.results=hits; S.kws=activeKws(parsed); S.page=0; S.sel=-1;
-        showResults();
-        return;
-      }
-      var si=shardIds[idx];
-      ensureShard(si,function(map){
-        if(runId!==fullRun) return;
-        var list=byShard[si];
-        for(var k=0;k<list.length;k++){
-          var o=list[k], txt=map[o.id];
-          if(!txt) continue;
-          var low=txt.toLowerCase();
-          if(!matchOne(low,parsed)) continue;
-          var sc=scoreMeta(o,parsed)+8;
-          if(sc>maxSc) maxSc=sc;
-          hits.push({o:o,sc:sc,snip:makeSnip(txt,parsed),where:['正文']});
-        }
-        idx++;
-        loading(true,'正在扫描正文',(idx)+' / '+shardIds.length+' 个分片 · 已命中 '+hits.length+' 篇',idx/shardIds.length);
-        progress(idx/shardIds.length);
-        setTimeout(step,0);
-      },function(){ idx++; setTimeout(step,0); });
+    function finish(){
+      loading(false);
+      hits.sort(function(a,b){ return b.sc-a.sc || (a.o.src-b.o.src) || a.o.c-b.o.c; });
+      hits.forEach(function(r){ r.pct = Math.max(8, Math.round(r.sc/maxSc*100)); });
+      S.results=hits; S.kws=activeKws(parsed); S.page=0; S.sel=-1;
+      showResults();
     }
-    step();
+    function scanned(){
+      done++; running--;
+      loading(true,'正在扫描正文',done+' / '+total+' 个分片 · 已命中 '+hits.length+' 篇',done/total);
+      progress(done/total);
+      if(done>=total) finish(); else pump();
+    }
+    function pump(){
+      if(runId!==fullRun) return;
+      while(running<FULL_PAR && next<total){
+        (function(si){
+          running++; next++;
+          ensureShard(si,function(map){
+            if(runId!==fullRun) return;      /* 已被新一轮搜索取代，丢弃结果 */
+            var list=byShard[si];
+            for(var k=0;k<list.length;k++){
+              var o=list[k], txt=map[o.id];
+              if(!txt) continue;
+              var low=txt.toLowerCase();
+              if(!matchOne(low,parsed)) continue;
+              var sc=scoreMeta(o,parsed)+8;
+              if(sc>maxSc) maxSc=sc;
+              hits.push({o:o,sc:sc,snip:makeSnip(txt,parsed),where:['正文']});
+            }
+            scanned();
+          },function(){
+            /* 单片失败也要计入进度，否则 running 不减会卡死；
+               但必须让用户知道结果不全 —— 静默失败会被误读成「没搜到」 */
+            if(!failed++) toast('有分片加载失败，搜索结果可能不完整');
+            scanned();
+          });                        /* 单片失败也计入进度，避免卡在 running */
+        })(shardIds[next]);
+      }
+    }
+    pump();
   });
 }
 /* 摘要清洗：去掉外部归档篇首的「来源/原路径/说明」样板文字 */
